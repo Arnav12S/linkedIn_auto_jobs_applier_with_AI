@@ -49,7 +49,8 @@ class ConfigValidator:
             'locations': list,
             'distance': int,
             'companyBlacklist': list,
-            'titleBlacklist': list
+            'titleBlacklist': list,
+            'languages': list
         }
 
         for key, expected_type in required_keys.items():
@@ -93,6 +94,9 @@ class ConfigValidator:
                 raise ConfigError(f"'{blacklist}' must be a list in config file {config_yaml_path}")
             if parameters[blacklist] is None:
                 parameters[blacklist] = []
+
+        if not all(isinstance(lang, str) for lang in parameters['languages']):
+            raise ConfigError(f"'languages' must be a list of strings in config file {config_yaml_path}")
 
         return parameters
 

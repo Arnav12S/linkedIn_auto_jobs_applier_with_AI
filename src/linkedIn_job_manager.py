@@ -10,7 +10,7 @@ import src.utils as utils
 from src.job import Job
 from src.linkedIn_easy_applier import LinkedInEasyApplier
 import json
-
+import langdetect
 
 class EnvironmentKeys:
     def __init__(self):
@@ -45,6 +45,7 @@ class LinkedInJobManager:
             self.resume_path = None
         self.output_file_directory = Path(parameters['outputFileDirectory'])
         self.env_config = EnvironmentKeys()
+        self.languages = parameters.get('languages', [])
         #self.old_question()
 
     def set_gpt_answerer(self, gpt_answerer):
@@ -117,6 +118,12 @@ class LinkedInJobManager:
             raise Exception("No job class elements found on page")
         job_list = [Job(*self.extract_job_information_from_tile(job_element)) for job_element in job_list_elements] 
         for job in job_list:
+            job_description = self.get_job_description(job.link)
+            job_language = langdetect.detect(job_description)
+            if job_language not in self.languages:
+                utils.printyellow(f"Skipping job {job.title} at {job.company} due to language mismatch.")
+                self.write_to_file(job, "skipped")
+                continue
             if self.is_blacklisted(job.title, job.company, job.link):
                 utils.printyellow(f"Blacklisted {job.title} at {job.company}, skipping...")
                 self.write_to_file(job, "skipped")
@@ -206,3 +213,19 @@ class LinkedInJobManager:
         company_blacklisted = company.strip().lower() in (word.strip().lower() for word in self.company_blacklist)
         link_seen = link in self.seen_jobs
         return title_blacklisted or company_blacklisted or link_seen
+
+    def get_job_description(self, job_link):
+        self.driver.get(job_link)
+        time.sleep(random.uniform(3, 5))
+        try:
+            see_more_button = self.driver.find_element(By.XPATH, '//button[@aria-label="Click to see more description"]')
+            actions = ActionChains(self.driver)
+            actions.move_to_element(see_more_button).click().perform()
+            time.sleep(2)
+            description = self.driver.find_element(By.CLASS_NAME, 'jobs-description-content__text').text
+            return description
+        except NoSuchElementException:
+            return ""
+        except Exception:
+            tb_str = traceback.format_exc()
+            raise Exception(f"Error getting Job description: \nTraceback:\n{tb_str}")
